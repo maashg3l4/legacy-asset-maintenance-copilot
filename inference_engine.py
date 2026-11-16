@@ -1,8 +1,18 @@
 import paho.mqtt.client as mqtt
-import json, numpy as np, time, os
+import json, numpy as np, time, os, joblib
 from groq import Groq
+from sklearn.ensemble import IsolationForest
 
-# ⚠️ PUT YOUR API KEY HERE
+# 1. Load the Real ML Model
+# If the file doesn't exist, we train a quick one for the demo
+if not os.path.exists("isolation_forest_v1.joblib"):
+    print("Training Isolation Forest...")
+    X_train = np.random.normal(0.12, 0.02, (500, 4))  # Normal baseline
+    model = IsolationForest(contamination=0.05, random_state=42).fit(X_train)
+    joblib.dump(model, "isolation_forest_v1.joblib")
+else:
+    model = joblib.load("isolation_forest_v1.joblib")
+
 try:
     groq_client = Groq(api_key="YOUR_GROQ_API_KEY_HERE")
 except:
@@ -11,7 +21,7 @@ except:
 anomaly_streak = 0
 current_state = "NORMAL"
 
-def call_groq_api(rms, kurtosis_val):
+def call_groq_api(rms, kurtosis_val, client):
     alert_json = {}
     if groq_client:
         try:
@@ -28,16 +38,9 @@ def call_groq_api(rms, kurtosis_val):
             print("Groq Error:", e)
             
     if not alert_json:
-        alert_json = {
-            "hypothesis": "Outer-race bearing degradation",
-            "severity": "HIGH",
-            "actions": ["Schedule inspection within 24 hours", "Check lubrication"],
-            "parts": ["Bearing SKF-6205-2RS"],
-            "downtime": "2.0 hours"
-        }
+        alert_json = {"hypothesis": "Outer-race bearing degradation", "severity": "HIGH", "actions": ["Inspect bearing", "Check lubrication"], "parts": ["SKF-6205-2RS"]}
         
-    with open("latest_alert.json", "w") as f:
-        json.dump(alert_json, f)
+    client.publish("aegisvision/factory/motor_01/alerts", json.dumps(alert_json))
 
 def on_connect(client, userdata, flags, rc, properties):
     client.subscribe("aegisvision/factory/motor_01/vibration")
@@ -49,22 +52,30 @@ def on_message(client, userdata, msg):
     rms = float(features[0][0])
     kurtosis_val = float(features[0][1])
     
-    with open("latest_telemetry.json", "w") as f:
-        json.dump({"rms": rms, "kurtosis": kurtosis_val}, f)
+    # Broadcast live telemetry for the dashboard
+    client.publish("aegisvision/factory/motor_01/telemetry", json.dumps({"rms": rms, "kurtosis": kurtosis_val}))
 
-    if rms > 0.20:
+    # --- LAYER 1: ML PREDICTION ---
+    ml_pred = model.predict(features)[0]  # -1 = anomaly, 1 = normal
+    is_ml_anomaly = (ml_pred == -1)
+
+    # --- LAYER 2: HYBRID RULE (Operationally Relevant) ---
+    is_rule_anomaly = (rms > 0.20)  # Physical threshold
+
+    # Only trigger if BOTH agree (prevents false alarms)
+    is_real_anomaly = is_ml_anomaly and is_rule_anomaly
+
+    if is_real_anomaly:
         anomaly_streak += 1
     else:
         anomaly_streak = 0
 
     if anomaly_streak >= 3 and current_state != "CRITICAL":
         current_state = "CRITICAL"
-        call_groq_api(rms, kurtosis_val)
+        call_groq_api(rms, kurtosis_val, client)
         
     elif anomaly_streak == 0 and current_state == "CRITICAL":
         current_state = "NORMAL"
-        if os.path.exists("latest_alert.json"):
-            os.remove("latest_alert.json")
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
