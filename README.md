@@ -19,22 +19,17 @@ An end-to-end, event-driven **Prescriptive Maintenance System**. It ingests raw 
 flowchart LR
     %% Subgraphs for Enterprise Look
     subgraph Edge [🏭 Edge Layer]
-        S[Sensor Simulator
-(Colab)]
+        S[Sensor Simulator<br>(Colab)]
     end
 
     subgraph Cloud [☁️ Cloud Backend]
-        M(MQTT Broker
-HiveMQ)
-        I{Anomaly Engine
-Isolation Forest}
-        L[GenAI Copilot
-Groq Llama-3]
+        M(MQTT Broker<br>HiveMQ)
+        I{Anomaly Engine<br>Isolation Forest}
+        L[GenAI Copilot<br>Groq Llama-3]
     end
 
     subgraph Frontend [💻 Frontend]
-        D[Streamlit Dashboard
-Cloud]
+        D[Streamlit Dashboard<br>Cloud]
     end
 
     %% Connections
