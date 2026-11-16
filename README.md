@@ -1,55 +1,58 @@
-# Legacy Asset Maintenance Copilot
+# ⚙️ Legacy Asset Maintenance Copilot
 
-**A Multimodal Predictive Maintenance System for Legacy Industrial Assets**
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+![MQTT](https://img.shields.io/badge/MQTT-HiveMQ-660066?logo=mqtt&logoColor=white)
+![Groq](https://img.shields.io/badge/LLM-Groq-f55036)
+![ML](https://img.shields.io/badge/ML-Isolation%20Forest-green)
 
-This project aims to bridge the gap between modern AI and aging industrial infrastructure. Instead of relying on clean, curated datasets, this system is designed to handle the messy reality of legacy equipment: noisy sensors, missing data, and disconnected maintenance records.
+**Live Demo:** [https://legacy-asset-maintenance-copilot-4.streamlit.app/](https://legacy-asset-maintenance-copilot-4.streamlit.app/)
 
-## 🎯 Project Goal
-To build an explainable, human-in-the-loop maintenance decision system that answers:
-- *What* is abnormal?
-- *Which* component is affected?
-- *How urgent* is it?
-- *What evidence* supports the decision?
-- *What action* should be taken?
+## 🎯 The Problem
+Legacy industrial machines lack modern sensors, and unplanned downtime costs factories millions. Most AI projects fail in production because they focus only on model accuracy, ignoring the realities of **alarm fatigue**, **operational context**, and **technician trust**.
 
-## 🏗️ Architecture (High-Level)
-The system follows a layered architecture:
-1.  **Edge Simulation:** Python scripts replaying public datasets (CWRU, NASA IMS) via MQTT.
-2.  **Data Pipeline:** MQTT Broker → FastAPI → Time-Series Database (InfluxDB).
-3.  **AI Core:** Anomaly Detection (Isolation Forest, Autoencoders) + Rule-Based Logic.
-4.  **Application:** Streamlit Dashboard with Technician Feedback Loop.
+## 🏛️ The Solution
+An end-to-end, event-driven **Prescriptive Maintenance System**. It ingests raw vibration telemetry, detects anomalies, and uses an LLM to generate actionable maintenance reports for technicians.
 
-*(Detailed architecture diagrams will be added in Phase 2)*
+### 🔄 System Architecture
+```mermaid
+graph TD
+    A[Simulated Edge Sensor] -->|Publishes Vibration Data| B(MQTT Broker: HiveMQ)
+    B -->|Subscribes Telemetry| C{Inference Engine}
+    C -->|Isolation Forest| D[Anomaly Detected]
+    D -->|Trigger LLM| E[Groq API - Llama 3]
+    E -->|Generates Structured JSON| F[Publish to Alert Topic]
+    B -->|Stream Live Data| G[Streamlit Cloud]
+    F -->|Stream Live Alerts| G
+    G -->|Interactive UI| H((Technician Dashboard))
+    G -->|RAG Chatbot| I[Ask Maintenance Questions]
+```
 
-## 📊 Week 1 Progress: Data Foundation
-**Objective:** Validate the ability to load, process, and extract features from the CWRU Bearing Dataset.
+## ✨ Key Features
+* **📡 Real-Time Telemetry:** Streams continuous vibration data (RMS & Kurtosis) over MQTT.
+* **🧠 Hybrid Anomaly Detection:** Uses an Isolation Forest for statistical anomaly detection, gated by physics-based rules (`RMS > 0.20`) to eliminate false positives.
+* **🤖 GenAI Copilot (Groq):** When an anomaly is confirmed, it calls the Groq API to generate a strict JSON maintenance plan (Hypothesis, Severity, Actions, Parts).
+* **💬 RAG Chatbot:** An embedded Retrieval-Augmented Generation chatbot allows technicians to query a maintenance manual. It uses **FAISS** and **SentenceTransformers** to ensure answers are grounded in actual documentation.
+* **🛡️ Rate-Limit Resilience:** Implements a model fallback system to handle API rate limits gracefully.
 
-**Key Findings:**
-- Successfully loaded normal (`97.mat`) and faulty (`105.mat`) baseline signals.
-- Extracted time-domain features: **RMS** and **Kurtosis**.
-- *Observation:* The faulty signal exhibits significantly higher Kurtosis, indicating sharp impulses characteristic of bearing defects.
+## 🚨 Honest Limitations (Engineering Transparency)
+1. **Simulated Data:** The current `publisher.py` uses a physics-inspired synthetic data generator (exponential degradation). It does not yet connect to physical hardware (e.g., ESP32 + MPU6050).
+2. **Cloud Dependency:** The backend runs in Google Colab. If the Colab runtime disconnects, the data stream stops.
+3. **Binary Status:** The system detects 'Anomaly vs. Normal'. It does not yet predict Remaining Useful Life (RUL) in hours.
 
-**Initial Results:**
-| Signal Type | RMS | Kurtosis |
-| :--- | :--- | :--- |
-| Normal | (Your Value) | (Your Value) |
-| Faulty | (Your Value) | (Your Value) |
+## 🛠️ Tech Stack
+* **Backend:** Python, Paho-MQTT, Scikit-learn
+* **LLM Integration:** Groq API (`openai/gpt-oss-20b`)
+* **RAG Pipeline:** FAISS, SentenceTransformers (`all-MiniLM-L6-v2`)
+* **Frontend:** Streamlit, Plotly, Pandas
+* **Deployment:** Streamlit Community Cloud, HiveMQ (Public Broker)
 
-*(The plot generated in Colab will be inserted here)*
+## 🚀 How to Run Locally
+1. Clone the repo: `git clone https://github.com/maashg3l4/legacy-asset-maintenance-copilot.git`
+2. Install dependencies: `pip install -r requirements.txt`
+3. Add your Groq API Key to `inference_engine.py` or set it as an environment variable.
+4. Run the Streamlit app: `streamlit run app.py`
+5. Run the publisher (e.g., in a separate terminal/Colab): `python publisher.py`
 
-## 🛠️ Tech Stack (Planned)
-- **Data & AI:** Python, Scikit-learn, PyTorch, SciPy
-- **Backend:** FastAPI, MQTT (Mosquitto)
-- **Database:** InfluxDB / TimescaleDB
-- **Frontend:** Streamlit
-- **Deployment:** Hugging Face Spaces / Oracle Cloud Free Tier
-
-## 🚀 Future Roadmap
-- **Week 2:** Simulate live MQTT stream from CWRU data.
-- **Week 3:** Train Isolation Forest for unsupervised anomaly detection.
-- **Week 4:** Build Streamlit dashboard for real-time monitoring.
-
-## ⚠️ Honest Limitations
-- Public datasets do not fully represent real factory conditions.
-- The system will initially be validated in "shadow mode" (read-only).
-- This is a portfolio project demonstrating production engineering principles, not a commercial product.
+---
+*Built with a focus on Industrial IoT, MLOps principles, and Human-in-the-Loop AI.*
