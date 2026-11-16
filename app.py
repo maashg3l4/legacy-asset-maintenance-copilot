@@ -2,15 +2,17 @@ import streamlit as st
 import paho.mqtt.client as mqtt
 import json, pandas as pd, plotly.graph_objects as go
 from datetime import datetime
-import time, threading, queue
+import time, threading, queue, os
 from rag_engine import get_answer
 
 st.set_page_config(page_title="Maintenance Copilot", layout="wide")
 
+# --- UI CONFIG ---
 css = "<style>.metric-box { padding: 15px; border-radius: 10px; background-color: #1E2129; text-align: center; border: 1px solid #333; } .metric-val { font-size: 32px; font-weight: bold; color: #00BFFF; } .status-normal { color: #00FF00; font-weight: bold; font-size: 24px; } .status-critical { color: #FF4B4B; font-weight: bold; font-size: 24px; animation: blinker 1s linear infinite; } @keyframes blinker { 50% { opacity: 0; } } .alert-card { padding: 20px; border-radius: 10px; background-color: #2E1C1C; border-left: 5px solid #FF4B4B; margin-top: 20px; color: white;}</style>"
 st.markdown(css, unsafe_allow_html=True)
 st.title("⚙️ Legacy Asset Maintenance Copilot")
 
+# --- SESSION STATE INIT ---
 if 'mqtt_queue' not in st.session_state:
     st.session_state.mqtt_queue = queue.Queue()
 if 'history' not in st.session_state:
@@ -22,6 +24,7 @@ if 'latest_alert' not in st.session_state:
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
+# --- MQTT LISTENER ---
 @st.cache_resource
 def start_mqtt(_q):
     def on_connect(client, userdata, flags, rc, properties):
@@ -38,6 +41,7 @@ def start_mqtt(_q):
 
 start_mqtt(st.session_state.mqtt_queue)
 
+# --- PROCESS MQTT QUEUE ---
 while not st.session_state.mqtt_queue.empty():
     topic, data = st.session_state.mqtt_queue.get_nowait()
     if "telemetry" in topic:
@@ -51,6 +55,7 @@ while not st.session_state.mqtt_queue.empty():
         st.session_state.is_critical = True
         st.session_state.latest_alert = data
 
+# --- RENDER TELEMETRY UI ---
 col1, col2, col3 = st.columns(3)
 if not st.session_state.history.empty:
     latest = st.session_state.history.iloc[-1]
@@ -64,27 +69,38 @@ if not st.session_state.history.empty:
     fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=20, b=20))
     st.plotly_chart(fig, use_container_width=True)
 else:
-    # THE FIX: Re-added the placeholders
     col1.markdown('<div class="metric-box"><p>Live RMS</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
     col2.markdown('<div class="metric-box"><p>Live Kurtosis</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
     col3.markdown('<div class="metric-box"><p>Status</p><div class="status-normal">WAITING FOR MQTT</div></div>', unsafe_allow_html=True)
 
+# --- ALERT CARD ---
 if st.session_state.latest_alert and st.session_state.is_critical:
     alert = st.session_state.latest_alert
     st.markdown(f'<div class="alert-card"><h3>🚨 AI COPILOT DIAGNOSIS</h3><p><strong>Hypothesis:</strong> {alert.get("hypothesis")}</p><p><strong>Actions:</strong> {", ".join(alert.get("actions", []))}</p></div>', unsafe_allow_html=True)
 
+# --- CHATBOT ---
 st.markdown("---")
 st.subheader("💬 Ask the Maintenance Copilot")
+
+# Render existing chat history cleanly
+for msg in st.session_state.chat_history:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# Chat Input
 user_query = st.chat_input("Ask about bearing maintenance...")
 if user_query:
+    # 1. Append user message
     st.session_state.chat_history.append({"role": "user", "content": user_query})
-    with st.spinner("Thinking..."):
-        answer = get_answer(user_query)
+    with st.chat_message("user"):
+        st.markdown(user_query)
+    
+    # 2. Generate and append assistant message
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            answer = get_answer(user_query)
+            st.markdown(answer)
     st.session_state.chat_history.append({"role": "assistant", "content": answer})
 
-for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-time.sleep(1)
+time.sleep(0.5)
 st.rerun()
