@@ -63,6 +63,11 @@ if not st.session_state.history.empty:
     fig = go.Figure(data=[go.Scatter(x=st.session_state.history["Time"], y=st.session_state.history["RMS"], line=dict(color='#00BFFF', width=2))])
     fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=20, b=20))
     st.plotly_chart(fig, use_container_width=True)
+else:
+    # THE FIX: Re-added the placeholders
+    col1.markdown('<div class="metric-box"><p>Live RMS</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
+    col2.markdown('<div class="metric-box"><p>Live Kurtosis</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
+    col3.markdown('<div class="metric-box"><p>Status</p><div class="status-normal">WAITING FOR MQTT</div></div>', unsafe_allow_html=True)
 
 if st.session_state.latest_alert and st.session_state.is_critical:
     alert = st.session_state.latest_alert
