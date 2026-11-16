@@ -17,29 +17,26 @@ An end-to-end, event-driven **Prescriptive Maintenance System**. It ingests raw 
 ### 🔄 System Architecture
 ```mermaid
 flowchart LR
-    %% Subgraphs for Enterprise Look
-    subgraph Edge [🏭 Edge Layer]
-        S[Sensor Simulator<br>(Colab)]
+    subgraph Edge ["🏭 Edge Layer"]
+        S["Sensor Simulator<br>(Colab)"]
     end
 
-    subgraph Cloud [☁️ Cloud Backend]
-        M(MQTT Broker<br>HiveMQ)
-        I{Anomaly Engine<br>Isolation Forest}
-        L[GenAI Copilot<br>Groq Llama-3]
+    subgraph Cloud ["☁️ Cloud Backend"]
+        M("MQTT Broker<br>HiveMQ")
+        I{"Anomaly Engine<br>Isolation Forest"}
+        L["GenAI Copilot<br>Groq Llama-3"]
     end
 
-    subgraph Frontend [💻 Frontend]
-        D[Streamlit Dashboard<br>Cloud]
+    subgraph Frontend ["💻 Frontend"]
+        D["Streamlit Dashboard<br>Cloud"]
     end
 
-    %% Connections
     S -- Telemetry --> M
     M -- Data Stream --> I
     I -- Anomaly Detected --> L
     L -- JSON Alert --> M
     M -- Live Updates --> D
 
-    %% Node Styling (World-Class Colors)
     style S fill:#333,stroke:#fff,stroke-width:2px,color:#fff
     style M fill:#660066,stroke:#fff,stroke-width:2px,color:#fff
     style I fill:#FF4B4B,stroke:#fff,stroke-width:2px,color:#fff
