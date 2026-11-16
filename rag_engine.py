@@ -6,7 +6,6 @@ import numpy as np
 
 embedder = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Ensure the key is read correctly from Streamlit Secrets
 api_key = os.environ.get("GROQ_API_KEY", "")
 groq_client = Groq(api_key=api_key)
 
@@ -37,13 +36,13 @@ def get_answer(query: str) -> str:
     Provide a concise, actionable answer."""
     
     try:
+        # ✅ FIX: Using the current supported model
         completion = groq_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b", 
             temperature=0.1,
             max_tokens=200
         )
         return completion.choices[0].message.content
     except Exception as e:
-        # THIS IS THE FIX: Return the exact error so we can see it
-        return f"❌ REAL ERROR: {str(e)}"
+        return f"Error: System busy. Please try again later."
