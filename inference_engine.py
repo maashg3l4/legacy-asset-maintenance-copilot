@@ -3,15 +3,16 @@ import json, numpy as np, os, time
 from groq import Groq
 
 # ⚠️ PASTE YOUR REAL KEY HERE
-groq_client = Groq(api_key="YOUR_GROQ_KEY_HERE")
+groq_client = Groq(api_key="YOUR_GROQ_KEY_HERE
+")
 
-# Switched to the high-limit model
-MODEL_NAME = "llama-3.1-8b-instant" 
+# ✅ FIX: Using the current supported model
+MODEL_NAME = "openai/gpt-oss-20b" 
 
 anomaly_streak = 0
 current_state = "NORMAL"
-last_api_call_time = 0  # Cooldown tracker
-COOLDOWN_SECONDS = 60   # Wait 60s between API calls
+last_api_call_time = 0
+COOLDOWN_SECONDS = 60
 
 def call_groq_api(rms, kurtosis_val, client):
     global last_api_call_time
@@ -33,7 +34,7 @@ def call_groq_api(rms, kurtosis_val, client):
         alert_json = {"hypothesis": "FALLBACK: Outer-race degradation", "severity": "HIGH", "actions": ["Inspect bearing"], "parts": ["SKF-6205-2RS"], "downtime": "2 hours"}
         
     client.publish("aegisvision/factory/motor_01/alerts", json.dumps(alert_json))
-    last_api_call_time = time.time() # Reset cooldown timer
+    last_api_call_time = time.time()
 
 def on_connect(client, userdata, flags, rc, properties):
     client.subscribe("aegisvision/factory/motor_01/vibration")
@@ -54,7 +55,6 @@ def on_message(client, userdata, msg):
 
     current_time = time.time()
     
-    # Check if we are in an anomaly AND the cooldown has expired
     if anomaly_streak >= 3 and current_state != "CRITICAL" and (current_time - last_api_call_time > COOLDOWN_SECONDS):
         current_state = "CRITICAL"
         call_groq_api(rms, kurtosis_val, client)
