@@ -23,19 +23,26 @@ embeddings = embedder.encode(chunks)
 index = faiss.IndexFlatL2(embeddings.shape[1])
 index.add(np.array(embeddings).astype('float32'))
 
-def get_answer(query: str) -> str:
+# FIX: Added chat_history parameter for memory
+def get_answer(query: str, chat_history: list = []) -> str:
     query_vec = embedder.encode([query]).astype('float32')
     _, indices = index.search(query_vec, 1)
     context = chunks[indices[0][0]]
     
-    prompt = f"""You are a maintenance copilot. Use ONLY the provided manual context to answer.
-    Manual Context: {context}
-    Technician Query: {query}
-    Provide a concise, actionable answer."""
+    # Build message history for the LLM
+    messages = [
+        {"role": "system", "content": f"You are a maintenance copilot. Use ONLY this manual context to answer: {context}"}
+    ]
+    
+    # Add previous conversation
+    for msg in chat_history[-4:]: # Keep last 2 interactions (4 messages) to save tokens
+        messages.append({"role": msg["role"], "content": msg["content"]})
+        
+    messages.append({"role": "user", "content": query})
     
     try:
         completion = groq_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             model="openai/gpt-oss-20b",
             temperature=0.1,
             max_tokens=200
