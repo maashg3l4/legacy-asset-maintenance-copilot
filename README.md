@@ -16,16 +16,40 @@ An end-to-end, event-driven **Prescriptive Maintenance System**. It ingests raw 
 
 ### 🔄 System Architecture
 ```mermaid
-graph TD
-    A[Simulated Edge Sensor] -->|Publishes Vibration Data| B(MQTT Broker: HiveMQ)
-    B -->|Subscribes Telemetry| C{Inference Engine}
-    C -->|Isolation Forest| D[Anomaly Detected]
-    D -->|Trigger LLM| E[Groq API - Llama 3]
-    E -->|Generates Structured JSON| F[Publish to Alert Topic]
-    B -->|Stream Live Data| G[Streamlit Cloud]
-    F -->|Stream Live Alerts| G
-    G -->|Interactive UI| H((Technician Dashboard))
-    G -->|RAG Chatbot| I[Ask Maintenance Questions]
+flowchart LR
+    %% Subgraphs for Enterprise Look
+    subgraph Edge [🏭 Edge Layer]
+        S[Sensor Simulator
+(Colab)]
+    end
+
+    subgraph Cloud [☁️ Cloud Backend]
+        M(MQTT Broker
+HiveMQ)
+        I{Anomaly Engine
+Isolation Forest}
+        L[GenAI Copilot
+Groq Llama-3]
+    end
+
+    subgraph Frontend [💻 Frontend]
+        D[Streamlit Dashboard
+Cloud]
+    end
+
+    %% Connections
+    S -- Telemetry --> M
+    M -- Data Stream --> I
+    I -- Anomaly Detected --> L
+    L -- JSON Alert --> M
+    M -- Live Updates --> D
+
+    %% Node Styling (World-Class Colors)
+    style S fill:#333,stroke:#fff,stroke-width:2px,color:#fff
+    style M fill:#660066,stroke:#fff,stroke-width:2px,color:#fff
+    style I fill:#FF4B4B,stroke:#fff,stroke-width:2px,color:#fff
+    style L fill:#f55036,stroke:#fff,stroke-width:2px,color:#fff
+    style D fill:#00BFFF,stroke:#fff,stroke-width:2px,color:#fff
 ```
 
 ## ✨ Key Features
