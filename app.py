@@ -1,10 +1,12 @@
 import streamlit as st
+import paho.mqtt.client as mqtt
 import json
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import time
-import os
+import threading
+import queue
 
 st.set_page_config(page_title="Maintenance Copilot", layout="wide")
 
@@ -14,36 +16,57 @@ st.markdown(css, unsafe_allow_html=True)
 st.title("⚙️ Legacy Asset Maintenance Copilot")
 st.markdown("**Asset:** MOTOR-01 | **Location:** Plant A | **Mode:** Live Telemetry")
 
+# --- STATE ---
+if 'mqtt_queue' not in st.session_state:
+    st.session_state.mqtt_queue = queue.Queue()
 if 'history' not in st.session_state:
     st.session_state.history = pd.DataFrame(columns=["Time", "RMS", "Kurtosis"])
 if 'is_critical' not in st.session_state:
     st.session_state.is_critical = False
+if 'latest_alert' not in st.session_state:
+    st.session_state.latest_alert = None
 
-data_path = "latest_telemetry.json"
-alert_path = "latest_alert.json"
+# --- MQTT LISTENER ---
+@st.cache_resource
+def start_mqtt(_q):
+    def on_connect(client, userdata, flags, rc, properties):
+        client.subscribe("aegisvision/factory/motor_01/telemetry")
+        client.subscribe("aegisvision/factory/motor_01/alerts")
 
-# Read live data
-if os.path.exists(data_path):
-    with open(data_path, "r") as f:
-        try:
-            data = json.load(f)
-            rms = data.get("rms", 0.0)
-            kurt = data.get("kurtosis", 0.0)
+    def on_message(client, userdata, msg):
+        payload = json.loads(msg.payload.decode())
+        _q.put((msg.topic, payload))
+
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.connect("broker.hivemq.com", 1883, 60)
+    threading.Thread(target=client.loop_forever, daemon=True).start()
+    return True
+
+start_mqtt(st.session_state.mqtt_queue)
+
+# --- PROCESS QUEUE ---
+while not st.session_state.mqtt_queue.empty():
+    topic, data = st.session_state.mqtt_queue.get_nowait()
+    
+    if "telemetry" in topic:
+        rms = data.get("rms", 0.0)
+        kurt = data.get("kurtosis", 0.0)
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
+        if len(st.session_state.history) == 0 or st.session_state.history.iloc[-1]["Time"] != timestamp:
+            new_row = pd.DataFrame({"Time": [timestamp], "RMS": [rms], "Kurtosis": [kurt]})
+            st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True).tail(50)
             
-            # If file exists, we know it's an alert
-            if os.path.exists(alert_path):
-                st.session_state.is_critical = True
-                
-            if rms < 0.15:
-                 st.session_state.is_critical = False
+        if rms < 0.15:
+            st.session_state.is_critical = False
+            
+    elif "alerts" in topic:
+        st.session_state.is_critical = True
+        st.session_state.latest_alert = data
 
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            if len(st.session_state.history) == 0 or st.session_state.history.iloc[-1]["Time"] != timestamp:
-                new_row = pd.DataFrame({"Time": [timestamp], "RMS": [rms], "Kurtosis": [kurt]})
-                st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True).tail(50)
-        except:
-            pass
-
+# --- RENDER UI ---
 col1, col2, col3 = st.columns(3)
 if not st.session_state.history.empty:
     latest = st.session_state.history.iloc[-1]
@@ -62,18 +85,15 @@ if not st.session_state.history.empty:
 else:
     col1.markdown('<div class="metric-box"><p>Live RMS</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
     col2.markdown('<div class="metric-box"><p>Live Kurtosis</p><div class="metric-val">--</div></div>', unsafe_allow_html=True)
-    col3.markdown('<div class="metric-box"><p>System Status</p><div class="status-normal">WAITING</div></div>', unsafe_allow_html=True)
+    col3.markdown('<div class="metric-box"><p>System Status</p><div class="status-normal">WAITING FOR MQTT</div></div>', unsafe_allow_html=True)
 
-if os.path.exists(alert_path) and st.session_state.is_critical:
-    with open(alert_path, "r") as f:
-        try:
-            alert = json.load(f)
-            st.markdown(f'<div class="alert-card"><h3>🚨 AI COPILOT DIAGNOSIS</h3><p><strong>Hypothesis:</strong> {alert.get("hypothesis", "N/A")}</p><p><strong>Severity:</strong> {alert.get("severity", "N/A")}</p><p><strong>Actions:</strong> {", ".join(alert.get("actions", []))}</p><p><strong>Parts:</strong> {", ".join(alert.get("parts", []))}</p></div>', unsafe_allow_html=True)
-            if st.button("Acknowledge"):
-                st.session_state.is_critical = False
-                st.rerun()
-        except:
-            pass
+if st.session_state.latest_alert and st.session_state.is_critical:
+    alert = st.session_state.latest_alert
+    st.markdown(f'<div class="alert-card"><h3>🚨 AI COPILOT DIAGNOSIS</h3><p><strong>Hypothesis:</strong> {alert.get("hypothesis", "N/A")}</p><p><strong>Severity:</strong> {alert.get("severity", "N/A")}</p><p><strong>Actions:</strong> {", ".join(alert.get("actions", []))}</p><p><strong>Parts:</strong> {", ".join(alert.get("parts", []))}</p></div>', unsafe_allow_html=True)
+    if st.button("Acknowledge"):
+        st.session_state.is_critical = False
+        st.session_state.latest_alert = None
+        st.rerun()
 
 time.sleep(1)
 st.rerun()
