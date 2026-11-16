@@ -1,0 +1,10 @@
+streamlit
+plotly
+paho-mqtt
+groq
+pandas
+numpy
+scipy
+scikit-learn
+sentence-transformers
+faiss-cpu
